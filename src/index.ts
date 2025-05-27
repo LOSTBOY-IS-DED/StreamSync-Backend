@@ -7,7 +7,8 @@ import Redis from "ioredis";
 dotenv.config();
 
 const PORT = process.env.WS_PORT || 4000;
-const SERVER_ID = process.env.SERVER_ID || `server-${Math.floor(Math.random() * 10000)}`;
+const SERVER_ID =
+  process.env.SERVER_ID || `server-${Math.floor(Math.random() * 10000)}`;
 const REDIS_URI = process.env.REDIS_URL || "redis://localhost:6379";
 
 const server = http.createServer();
@@ -22,10 +23,8 @@ const wss = new WebSocketServer({ server });
 
 // Redis configuration for Railway deployment
 const redisClient = createClient({
-  url: process.env.REDIS_URL || "redis://localhost:6379"
+  url: process.env.REDIS_URL || "redis://localhost:6379",
 });
-
-
 
 const subscriber = new Redis(REDIS_URI);
 const publisher = new Redis(REDIS_URI);
@@ -65,7 +64,7 @@ function handleRedisMessage(channel: string, message: string) {
     if (source === SERVER_ID) return;
     const roomConnections = connectionsByRoom.get(roomId);
     if (!roomConnections) return;
-    roomConnections.forEach(conn => {
+    roomConnections.forEach((conn) => {
       if (conn.readyState === WebSocket.OPEN) {
         conn.send(JSON.stringify({ type: event, ...data }));
       }
@@ -78,7 +77,11 @@ function handleRedisMessage(channel: string, message: string) {
   }
 }
 
-function updateLocalUserCount(roomId: string, userId: string, isJoining: boolean) {
+function updateLocalUserCount(
+  roomId: string,
+  userId: string,
+  isJoining: boolean
+) {
   if (!userIdsByRoom.has(roomId)) {
     userIdsByRoom.set(roomId, new Set());
   }
@@ -94,19 +97,22 @@ async function broadcastToRoom(roomId: string, event: string, data: any) {
   try {
     const roomConnections = connectionsByRoom.get(roomId);
     if (roomConnections) {
-      roomConnections.forEach(conn => {
+      roomConnections.forEach((conn) => {
         if (conn.readyState === WebSocket.OPEN) {
           conn.send(JSON.stringify({ type: event, ...data }));
         }
       });
     }
-    await publisher.publish("room-events", JSON.stringify({
-      roomId,
-      event,
-      data,
-      source: SERVER_ID,
-      timestamp: Date.now()
-    }));
+    await publisher.publish(
+      "room-events",
+      JSON.stringify({
+        roomId,
+        event,
+        data,
+        source: SERVER_ID,
+        timestamp: Date.now(),
+      })
+    );
   } catch (error) {
     console.error(`Error broadcasting to room ${roomId}:`, error);
   }
@@ -181,62 +187,78 @@ async function handleJoinRoom(ws: WebSocket, roomId: string, userId: string) {
     }
     userIdsByRoom.get(roomId)?.add(userId);
     const userCount = await addUserToRoom(roomId, userId);
-    console.log(`User joined room: ${userId} in ${roomId} (server: ${SERVER_ID}), total users: ${userCount}`);
+    console.log(
+      `User joined room: ${userId} in ${roomId} (server: ${SERVER_ID}), total users: ${userCount}`
+    );
     await sendRoomState(ws, roomId, userId);
-    await broadcastToRoom(roomId, "userJoined", { 
-      userId, 
-      userCount
+    await broadcastToRoom(roomId, "userJoined", {
+      userId,
+      userCount,
     });
   } catch (error) {
     console.error(`Error handling join for room ${roomId}:`, error);
-    ws.send(JSON.stringify({ 
-      type: "error", 
-      message: "Failed to join room. Please try again." 
-    }));
+    ws.send(
+      JSON.stringify({
+        type: "error",
+        message: "Failed to join room. Please try again.",
+      })
+    );
   }
 }
 
 async function sendRoomState(ws: WebSocket, roomId: string, userId: string) {
   try {
     const userCount = await getRoomUserCount(roomId);
-    ws.send(JSON.stringify({ 
-      type: "userCount", 
-      count: userCount 
-    }));
+    ws.send(
+      JSON.stringify({
+        type: "userCount",
+        count: userCount,
+      })
+    );
     const chatStatus = await redisClient.get(`chatStatus:${roomId}`);
-    ws.send(JSON.stringify({ 
-      type: "chatStatus", 
-      paused: chatStatus === "paused" 
-    }));
+    ws.send(
+      JSON.stringify({
+        type: "chatStatus",
+        paused: chatStatus === "paused",
+      })
+    );
     const songAddStatus = await redisClient.get(`allowSongAdd:${roomId}`);
-    ws.send(JSON.stringify({ 
-      type: "allowSongAdd", 
-      paused: songAddStatus === "paused" 
-    }));
+    ws.send(
+      JSON.stringify({
+        type: "allowSongAdd",
+        paused: songAddStatus === "paused",
+      })
+    );
     const messages = await redisClient.lRange(`chat:${roomId}`, 0, -1);
     messages.reverse().forEach((msg) => {
-      ws.send(JSON.stringify({ 
-        type: "message", 
-        ...JSON.parse(msg) 
-      }));
+      ws.send(
+        JSON.stringify({
+          type: "message",
+          ...JSON.parse(msg),
+        })
+      );
     });
     const songs = await redisClient.lRange(`queue:${roomId}`, 0, -1);
-    let parsedSongs = songs.map(song => JSON.parse(song));
+    let parsedSongs = songs.map((song) => JSON.parse(song));
     for (let song of parsedSongs) {
       const userVoteKey = `vote:${roomId}:${song.streamId}:${userId}`;
       const userVote = await redisClient.get(userVoteKey);
       song.hasLiked = userVote === "upvote";
     }
-    ws.send(JSON.stringify({ 
-      type: "songQueue", 
-      queue: parsedSongs 
-    }));
+    ws.send(
+      JSON.stringify({
+        type: "songQueue",
+        queue: parsedSongs,
+      })
+    );
     const nowPlayingSong = await redisClient.get(`nowPlaying:${roomId}`);
     if (nowPlayingSong) {
-      ws.send(JSON.stringify({ 
-        type: "nowPlaying", 
-        song: JSON.parse(nowPlayingSong) 
-      }));
+      ws.send(
+        JSON.stringify({
+          type: "nowPlaying",
+          song: JSON.parse(nowPlayingSong),
+        })
+      );
     }
   } catch (error) {
     console.error(`Error sending room state for ${roomId}:`, error);
@@ -260,20 +282,25 @@ wss.on("connection", (ws) => {
           await handleJoinRoom(ws, data.roomId, data.userId);
           break;
         case "message":
-          const messageData = JSON.stringify({ text: data.text, sender: data.sender });
+          const messageData = JSON.stringify({
+            text: data.text,
+            sender: data.sender,
+          });
           await redisClient.lPush(`chat:${roomId}`, messageData);
           await redisClient.lTrim(`chat:${roomId}`, 0, 49);
           const chatStatus = await redisClient.get(`chatStatus:${roomId}`);
           if (chatStatus === "paused") {
-            ws.send(JSON.stringify({ 
-              type: "chatError", 
-              message: "Chat is currently paused by the room admin"
-            }));
+            ws.send(
+              JSON.stringify({
+                type: "chatError",
+                message: "Chat is currently paused by the room admin",
+              })
+            );
             return;
           }
-          await broadcastToRoom(roomId, "message", { 
-            text: data.text, 
-            sender: data.sender 
+          await broadcastToRoom(roomId, "message", {
+            text: data.text,
+            sender: data.sender,
           });
           await markRoomActive(roomId);
           break;
@@ -297,29 +324,26 @@ wss.on("connection", (ws) => {
           const existingVote = await redisClient.get(userVoteKey);
           const songsData = await redisClient.lRange(songQueueKey, 0, -1);
           const uniqueSongsMap = new Map();
-          songsData.forEach(songString => {
+          songsData.forEach((songString) => {
             const song = JSON.parse(songString);
             uniqueSongsMap.set(song.streamId, song);
           });
           let parsedQueue = Array.from(uniqueSongsMap.values());
-          let updatedQueue = parsedQueue.map(song => {
+          let updatedQueue = parsedQueue.map((song) => {
             if (song.streamId === data.songId) {
               let newUpvoteCount = song.upvoteCount || 0;
               if (existingVote === data.voteType) {
-                newUpvoteCount += (data.voteType === "upvote") ? -1 : 0;
+                newUpvoteCount += data.voteType === "upvote" ? -1 : 0;
                 redisClient.del(userVoteKey);
-              } 
-              else if (existingVote && existingVote !== data.voteType) {
+              } else if (existingVote && existingVote !== data.voteType) {
                 if (data.voteType === "upvote") {
                   newUpvoteCount += 1;
-                }
-                else {
+                } else {
                   newUpvoteCount = Math.max(newUpvoteCount - 1, 0);
                 }
                 redisClient.set(userVoteKey, data.voteType);
-              } 
-              else {
-                newUpvoteCount += (data.voteType === "upvote") ? 1 : 0;
+              } else {
+                newUpvoteCount += data.voteType === "upvote" ? 1 : 0;
                 redisClient.set(userVoteKey, data.voteType);
               }
               return { ...song, upvoteCount: newUpvoteCount };
@@ -345,20 +369,31 @@ wss.on("connection", (ws) => {
             await redisClient.lTrim(historyKey, 0, 4);
           }
           const queueSongs = await redisClient.lRange(songQueue, 0, -1);
-          const queueParsedSongs = queueSongs.map(song => JSON.parse(song));
+          const queueParsedSongs = queueSongs.map((song) => JSON.parse(song));
           if (queueParsedSongs.length > 0) {
-            const mostUpvotedSong = queueParsedSongs.reduce((prev, curr) => 
-              (prev?.upvoteCount || 0) > (curr?.upvoteCount || 0) ? prev : curr, queueParsedSongs[0]);
-            await redisClient.set(nowPlayingKey, JSON.stringify(mostUpvotedSong));
-            const updatedQueue = queueParsedSongs.filter(song => 
-              song.streamId !== mostUpvotedSong.streamId);
+            const mostUpvotedSong = queueParsedSongs.reduce(
+              (prev, curr) =>
+                (prev?.upvoteCount || 0) > (curr?.upvoteCount || 0)
+                  ? prev
+                  : curr,
+              queueParsedSongs[0]
+            );
+            await redisClient.set(
+              nowPlayingKey,
+              JSON.stringify(mostUpvotedSong)
+            );
+            const updatedQueue = queueParsedSongs.filter(
+              (song) => song.streamId !== mostUpvotedSong.streamId
+            );
             const queueMulti = redisClient.multi();
             queueMulti.del(songQueue);
             for (const song of updatedQueue) {
               queueMulti.rPush(songQueue, JSON.stringify(song));
             }
             await queueMulti.exec();
-            await broadcastToRoom(roomId, "nowPlaying", { song: mostUpvotedSong });
+            await broadcastToRoom(roomId, "nowPlaying", {
+              song: mostUpvotedSong,
+            });
             await broadcastToRoom(roomId, "songQueue", { queue: updatedQueue });
           }
           await markRoomActive(roomId);
@@ -367,14 +402,19 @@ wss.on("connection", (ws) => {
           const room = await redisClient.get(`chatStatus:${roomId}`);
           const newChatStatus = room === "paused" ? "active" : "paused";
           await redisClient.set(`chatStatus:${roomId}`, newChatStatus);
-          await broadcastToRoom(roomId, "chatStatus", { paused: newChatStatus === "paused" });
+          await broadcastToRoom(roomId, "chatStatus", {
+            paused: newChatStatus === "paused",
+          });
           await markRoomActive(roomId);
           break;
         case "allowSongAdd":
           const songAddState = await redisClient.get(`allowSongAdd:${roomId}`);
-          const newSongAddState = songAddState === "paused" ? "active" : "paused";
+          const newSongAddState =
+            songAddState === "paused" ? "active" : "paused";
           await redisClient.set(`allowSongAdd:${roomId}`, newSongAddState);
-          await broadcastToRoom(roomId, "allowSongAdd", { paused: newSongAddState === "paused" });
+          await broadcastToRoom(roomId, "allowSongAdd", {
+            paused: newSongAddState === "paused",
+          });
           await markRoomActive(roomId);
           break;
         default:
@@ -398,7 +438,7 @@ wss.on("connection", (ws) => {
         }
       }
       let isLastConnectionForUser = true;
-      connectionsByRoom.get(roomId)?.forEach(conn => {
+      connectionsByRoom.get(roomId)?.forEach((conn) => {
         if (connectionToUserId.get(conn) === userId) {
           isLastConnectionForUser = false;
         }
@@ -406,10 +446,12 @@ wss.on("connection", (ws) => {
       if (isLastConnectionForUser) {
         userIdsByRoom.get(roomId)?.delete(userId);
         const userCount = await removeUserFromRoom(roomId, userId);
-        console.log(`User left room: ${userId} in ${roomId} (server: ${SERVER_ID}), remaining users: ${userCount}`);
+        console.log(
+          `User left room: ${userId} in ${roomId} (server: ${SERVER_ID}), remaining users: ${userCount}`
+        );
         await broadcastToRoom(roomId, "userLeft", {
           userId,
-          userCount
+          userCount,
         });
       }
     }
@@ -442,4 +484,6 @@ async function gracefulShutdown() {
   }
 }
 
-server.listen(PORT, () => console.log(`WebSocket server ${SERVER_ID} running on port ${PORT}`));
+server.listen(PORT, () =>
+  console.log(`WebSocket server ${SERVER_ID} running on port ${PORT}`)
+);
