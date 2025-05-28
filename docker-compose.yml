@@ -1,23 +1,31 @@
-version: "3.8"
+version: "3.9"
 
 services:
-  websocket-server:
-    build: .
-    container_name: websocket-server
-    ports:
-      - "3000:3000"
-    depends_on:
-      - redis
-    environment:
-      - REDIS_URL=redis://redis:6379
-    volumes:
-      - /Users/subhajitchaudhury/Desktop/code-playground/projects/streamsync-backend:/app
-
-    restart: always
-
   redis:
-    image: redis:alpine
-    container_name: redis
+    image: redis/redis-stack:latest
+    container_name: redis-stack
     ports:
       - "6379:6379"
-    restart: always
+      - "8001:8001"
+    networks:
+      - streamsync_backend
+
+  streamsync-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: streamsync-server-compose
+    depends_on:
+      - redis
+    ports:
+      - "4000:4000"
+    environment:
+      WS_PORT: 4000
+      SERVER_ID: streamsync-docker
+      REDIS_URL: redis://redis:6379
+    networks:
+      - streamsync_backend
+
+networks:
+  streamsync_backend:
+    driver: bridge
