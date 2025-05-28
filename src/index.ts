@@ -9,7 +9,10 @@ dotenv.config();
 const PORT = process.env.WS_PORT || 4000;
 const SERVER_ID =
   process.env.SERVER_ID || `server-${Math.floor(Math.random() * 10000)}`;
-const REDIS_URI = process.env.REDIS_URL || "redis://localhost:6379";
+
+// const REDIS_URI = process.env.REDIS_URL || "redis://localhost:6379";
+//had to change for docker build
+const REDIS_URI = process.env.REDIS_URL || "redis://streamsync_redis:6379";
 
 const server = http.createServer();
 const wss = new WebSocketServer({ server });
